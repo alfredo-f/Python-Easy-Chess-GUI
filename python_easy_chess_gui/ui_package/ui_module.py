@@ -23,7 +23,7 @@ from python_easy_chess_gui.config import (
     white_init_promote_board,
     black_init_promote_board,
     promote_psg_to_pyc,
-    initial_board, menu_def_neutral, menu_def_play,
+    initial_board,
 )
 from python_easy_chess_gui.config import (
     MAX_DEPTH,
@@ -52,6 +52,141 @@ from python_easy_chess_gui.engine_package.engine_module import RunEngine
 from python_easy_chess_gui.play_package.play_module import (
     Timer, GuiBook,
 )
+
+
+UI_KEY_BOARD_MAIN = 'board_main_k'
+UI_KEY_CONTROLS_PLAY = 'controls_main_k'
+UI_KEY_CONTROLS_TRAIN_OPENINGS = 'controls_train_openings_k'
+
+UI_KEY_WHITE = '_White_'
+UI_KEY_BLACK = '_Black_'
+UI_KEY_GAME_STATUS = '_gamestatus_'
+UI_KEY_TIME_BASE_WHITE = 'w_base_time_k'
+UI_KEY_TIME_BASE_BLACK = 'b_base_time_k'
+UI_KEY_TIME_ELAPSED_WHITE = 'w_elapse_k'
+UI_KEY_TIME_ELAPSED_BLACK = 'b_elapse_k'
+UI_KEY_MOVE_LIST = '_movelist_'
+UI_KEY_MOVE_LIST_TITLE = '_movelist_title'
+
+UI_KEY_ADVISER_MAIN = 'adviser_k'
+UI_KEY_ADVISER_INFO = 'advise_info_k'
+UI_KEY_COMMENT_TITLE = 'comment_title_k'
+UI_KEY_COMMENT = 'comment_k'
+
+UI_KEY_BOOK_COMPUTER = 'polyglot_book1_k'
+UI_KEY_BOOK_COMPUTER_TITLE = 'book_computer_main_k'
+UI_KEY_BOOK_HUMAN = 'polyglot_book2_k'
+UI_KEY_BOOK_HUMAN_TITLE = 'book_human_main_k'
+
+UI_KEY_OPPONENT_SEARCH_ALL = 'search_info_all_k'
+UI_KEY_OPPONENT_SEARCH_ALL_TITLE = 'search_info_all_title_k'
+
+UI_KEY_ALL_BEFORE = [
+    UI_KEY_WHITE,
+    UI_KEY_BLACK,
+    UI_KEY_GAME_STATUS,
+    UI_KEY_TIME_BASE_WHITE,
+    UI_KEY_TIME_ELAPSED_WHITE,
+    UI_KEY_TIME_BASE_BLACK,
+    UI_KEY_TIME_ELAPSED_BLACK,
+    UI_KEY_ADVISER_MAIN,
+    UI_KEY_ADVISER_INFO,
+    UI_KEY_MOVE_LIST_TITLE,
+    UI_KEY_MOVE_LIST,
+    UI_KEY_COMMENT_TITLE,
+    UI_KEY_COMMENT,
+    UI_KEY_BOOK_COMPUTER_TITLE,
+    UI_KEY_BOOK_HUMAN_TITLE,
+    UI_KEY_BOOK_COMPUTER,
+    UI_KEY_BOOK_HUMAN,
+    UI_KEY_OPPONENT_SEARCH_ALL_TITLE,
+    UI_KEY_OPPONENT_SEARCH_ALL,
+]
+
+UI_KEY_BUTTON_TRAIN_OPENINGS_SIDE = 'train_open_select_side_k'
+
+UI_BUTTON_TRAIN_OPENINGS_SIDE_WHITE = "White"
+UI_BUTTON_TRAIN_OPENINGS_SIDE_BLACK = "Black"
+UI_BUTTON_TRAIN_OPENINGS_SIDE_BOTH = "Both"
+
+UI_BUTTON_TRAIN_OPENINGS_SIDE_ALL = [
+    UI_BUTTON_TRAIN_OPENINGS_SIDE_WHITE,
+    UI_BUTTON_TRAIN_OPENINGS_SIDE_BLACK,
+    UI_BUTTON_TRAIN_OPENINGS_SIDE_BOTH,
+]
+
+_TEST__UI_KEY_CONTROLS_TRAIN_OPENINGS_EXIT = "__UI_KEY_CONTROLS_TRAIN_OPENINGS_EXIT"
+
+UI_BUTTON_MODE_NEUTRAL = 'Neutral'
+UI_BUTTON_MODE_PLAY = 'Play'
+UI_BUTTON_MODE_TRAIN_OPENINGS = 'Train Openings'
+
+UI_STATIC_MODE_NEUTRAL = 'Mode     Neutral'
+UI_STATIC_MODE_PLAY = 'Mode     Play'
+UI_STATIC_MODE_TRAIN_OPENINGS = 'Mode     Train Openings'
+
+
+# (1) Mode: Neutral
+MENU_DEF_NEUTRAL = [
+    [
+        "&Mode",
+        [
+            UI_BUTTON_MODE_PLAY,
+            UI_BUTTON_MODE_TRAIN_OPENINGS,
+        ],
+    ],
+    [
+        "Boar&d",
+        [
+            "Flip",
+            "Color",
+            [
+                "Brown::board_color_k",
+                "Blue::board_color_k",
+                "Green::board_color_k",
+                "Gray::board_color_k",
+            ],
+            "Theme",
+            GUI_THEME,
+        ],
+    ],
+    [
+        "&Engine",
+        [
+            "Set Engine Adviser",
+            "Set Engine Opponent",
+            "Set Depth",
+            "Manage",
+            ["Install", "Edit", "Delete"],
+        ],
+    ],
+    ["&Time", ["User::tc_k", "Engine::tc_k"]],
+    ["&Book", ["Set Book::book_set_k"]],
+    ["&User", ["Set Name::user_name_k"]],
+    ["Tools", ["PGN", ["Delete Player::delete_player_k"]]],
+    ["&Settings", ["Game::settings_game_k"]],
+    ["&Help", ["About"]],
+]
+
+# (2) Mode: Play, info: hide
+MENU_DEF_PLAY = [
+    ["&Mode", [UI_BUTTON_MODE_NEUTRAL]],
+    [
+        "&Game",
+        [
+            "&New::new_game_k",
+            "Save to My Games::save_game_k",
+            "Save to White Repertoire",
+            "Save to Black Repertoire",
+            "Resign::resign_game_k",
+            "User Wins::user_wins_k",
+            "User Draws::user_draws_k",
+        ],
+    ],
+    ["FEN", ["Paste"]],
+    ["&Engine", ["Go", "Move Now"]],
+    ["&Help", ["About"]],
+]
 
 
 class EasyChessGui:
@@ -1067,6 +1202,170 @@ class EasyChessGui:
             
         return timer
 
+    def handle_click_on_board(
+        self,
+        window,
+        board,
+        move_state: int,
+        button,
+        move_from=None,
+        move_to=None,
+        fr_row=None,
+        fr_col=None,
+        to_row=None,
+        to_col=None,
+        move_cnt=None,
+        human_timer=None,
+        value=None,
+        moved_piece=None,
+        is_promote=None,
+        psg_promo=None,
+        piece=None,
+        is_human_stm=None,
+    ):
+    
+        should_continue = False
+        should_return = False
+    
+        if move_state == 0:
+            move_from = button
+            fr_row, fr_col = move_from
+            piece = self.psg_board[fr_row][fr_col]
+        
+            self.change_square_color(window, fr_row, fr_col)
+        
+            move_state = 1
+            moved_piece = board.piece_type_at(
+                chess.square(fr_col, 7 - fr_row)
+            )
+        
+            should_return = True
+    
+        elif move_state == 1:
+            is_promote = False
+            move_to = button
+            to_row, to_col = move_to
+            button_square = window.find_element(key=(fr_row, fr_col))
+        
+            if move_to == move_from:
+                color = self.sq_dark_color if (
+                                                  to_row + to_col) % 2 else self.sq_light_color
+            
+                button_square.Update(button_color=('white', color))
+                move_state = 0
+            
+                should_continue = True
+    
+        if not should_return and not should_continue:
+        
+            user_move = None
+        
+            # Get the fr_sq and to_sq of the move from user, based from this info
+            # we will create a move based from python-chess format.
+            # Note chess.square() and chess.Move() are from python-chess module
+            fr_row, fr_col = move_from
+            fr_sq = chess.square(fr_col, 7 - fr_row)
+            to_sq = chess.square(to_col, 7 - to_row)
+        
+            if self.relative_row(to_sq, board.turn) == RANK_8 and \
+                moved_piece == chess.PAWN:
+                is_promote = True
+                pyc_promo, psg_promo = self.get_promo_piece(
+                    user_move, board.turn, True
+                )
+                user_move = chess.Move(fr_sq, to_sq, promotion=pyc_promo)
+            else:
+                user_move = chess.Move(fr_sq, to_sq)
+        
+            if user_move in board.legal_moves:
+                if board.is_castling(user_move):
+                    self.update_rook(window, str(user_move))
+            
+                elif board.is_en_passant(user_move):
+                    self.update_ep(window, user_move, board.turn)
+            
+                # Empty the board from_square, applied to any types of move
+                self.psg_board[move_from[0]][move_from[1]] = BLANK
+            
+                if is_promote:
+                    self.psg_board[to_row][to_col] = psg_promo
+                else:
+                    self.psg_board[to_row][to_col] = piece
+            
+                self.redraw_board(window)
+            
+                board.push(user_move)
+                move_cnt += 1
+            
+                human_timer.update_base()
+            
+                time_left = human_timer.base
+                user_comment = value[UI_KEY_COMMENT]
+                self.update_game(move_cnt, user_move, time_left, user_comment)
+            
+                window.find_element(UI_KEY_MOVE_LIST).Update(disabled=False)
+                window.find_element(UI_KEY_MOVE_LIST).Update('')
+                window.find_element(UI_KEY_MOVE_LIST).Update(
+                    self.game.variations[0], append=True, disabled=True
+                )
+            
+                window.find_element(UI_KEY_COMMENT).Update('')
+                window.Element(UI_KEY_OPPONENT_SEARCH_ALL).Update('')
+            
+                self.change_square_color(window, fr_row, fr_col)
+                self.change_square_color(window, to_row, to_col)
+            
+                is_human_stm = not is_human_stm
+            
+                k1 = UI_KEY_TIME_ELAPSED_WHITE
+                k2 = UI_KEY_TIME_BASE_WHITE
+                if not self.is_user_white:
+                    k1 = UI_KEY_TIME_ELAPSED_BLACK
+                    k2 = UI_KEY_TIME_BASE_BLACK
+            
+                # Update elapse box
+                elapse_str = self.get_time_mm_ss_ms(
+                    human_timer.elapse
+                )
+                window.Element(k1).Update(elapse_str)
+            
+                # Update remaining time box
+                elapse_str = self.get_time_h_mm_ss(
+                    human_timer.base
+                )
+                window.Element(k2).Update(elapse_str)
+            
+                window.Element(UI_KEY_ADVISER_INFO).Update('')
+        
+            # Else if move is illegal
+            else:
+                move_state = 0
+                color = self.sq_dark_color \
+                    if (move_from[0] + move_from[
+                    1]) % 2 else self.sq_light_color
+            
+                # Restore the color of the fr square
+                button_square.Update(button_color=('white', color))
+            
+                should_continue = True
+    
+        return (
+            move_from,
+            move_to,
+            move_state,
+            moved_piece,
+            piece,
+            should_continue,
+            is_human_stm,
+            fr_row,
+            fr_col,
+            to_row,
+            to_col,
+            is_promote,
+            psg_promo,
+            piece,
+        )
+    
     def play_game(self, window, engine_id_name, board):
         """
         User can play a game against and engine.
@@ -1107,6 +1406,14 @@ class EasyChessGui:
         # Init timer
         human_timer = self.define_timer(window)
         engine_timer = self.define_timer(window, 'engine')
+        
+        fr_row = None
+        fr_col = None
+        to_row = None
+        to_col = None
+        is_promote = None
+        psg_promo = None
+        piece = None
 
         # Game loop
         while not board.is_game_over(claim_draw=True):
@@ -1426,132 +1733,44 @@ class EasyChessGui:
 
                     # Mode: Play, stm: User, user starts moving
                     if type(button) is tuple:
-                        # If fr_sq button is pressed
-                        if move_state == 0:
-                            move_from = button
-                            fr_row, fr_col = move_from
-                            piece = self.psg_board[fr_row][fr_col]  # get the move-from piece
-
-                            # Change the color of the "fr" board square
-                            self.change_square_color(window, fr_row, fr_col)
-
-                            move_state = 1
-                            moved_piece = board.piece_type_at(chess.square(fr_col, 7-fr_row))  # Pawn=1
-
-                        # Else if to_sq button is pressed
-                        elif move_state == 1:
-                            is_promote = False
-                            move_to = button
-                            to_row, to_col = move_to
-                            button_square = window.find_element(key=(fr_row, fr_col))
-
-                            # If move is cancelled, pressing same button twice
-                            if move_to == move_from:
-                                # Restore the color of the pressed board square
-                                color = self.sq_dark_color if (to_row + to_col) % 2 else self.sq_light_color
-
-                                # Restore the color of the fr square
-                                button_square.Update(button_color=('white', color))
-                                move_state = 0
-                                continue
-
-                            # Create a move in python-chess format based from user input
-                            user_move = None
-
-                            # Get the fr_sq and to_sq of the move from user, based from this info
-                            # we will create a move based from python-chess format.
-                            # Note chess.square() and chess.Move() are from python-chess module
-                            fr_row, fr_col = move_from
-                            fr_sq = chess.square(fr_col, 7-fr_row)
-                            to_sq = chess.square(to_col, 7-to_row)
-
-                            # If user move is a promote
-                            if self.relative_row(to_sq, board.turn) == RANK_8 and \
-                                    moved_piece == chess.PAWN:
-                                is_promote = True
-                                pyc_promo, psg_promo = self.get_promo_piece(
-                                        user_move, board.turn, True)
-                                user_move = chess.Move(fr_sq, to_sq, promotion=pyc_promo)
-                            else:
-                                user_move = chess.Move(fr_sq, to_sq)
-
-                            # Check if user move is legal
-                            if user_move in board.legal_moves:
-                                # Update rook location if this is a castle move
-                                if board.is_castling(user_move):
-                                    self.update_rook(window, str(user_move))
-
-                                # Update board if e.p capture
-                                elif board.is_en_passant(user_move):
-                                    self.update_ep(window, user_move, board.turn)
-
-                                # Empty the board from_square, applied to any types of move
-                                self.psg_board[move_from[0]][move_from[1]] = BLANK
-
-                                # Update board to_square if move is a promotion
-                                if is_promote:
-                                    self.psg_board[to_row][to_col] = psg_promo
-                                # Update the to_square if not a promote move
-                                else:
-                                    # Place piece in the move to_square
-                                    self.psg_board[to_row][to_col] = piece
-
-                                self.redraw_board(window)
-
-                                board.push(user_move)
-                                move_cnt += 1
-
-                                # Update clock, reset elapse to zero
-                                human_timer.update_base()
-
-                                # Update game, move from human
-                                time_left = human_timer.base
-                                user_comment = value['comment_k']
-                                self.update_game(move_cnt, user_move, time_left, user_comment)
-
-                                window.find_element('_movelist_').Update(disabled=False)
-                                window.find_element('_movelist_').Update('')
-                                window.find_element('_movelist_').Update(
-                                    self.game.variations[0], append=True, disabled=True)
-
-                                # Clear comment and engine search box
-                                window.find_element('comment_k').Update('')
-                                window.Element('search_info_all_k').Update('')
-
-                                # Change the color of the "fr" and "to" board squares
-                                self.change_square_color(window, fr_row, fr_col)
-                                self.change_square_color(window, to_row, to_col)
-
-                                is_human_stm = not is_human_stm
-                                # Human has done its move
-
-                                k1 = 'w_elapse_k'
-                                k2 = 'w_base_time_k'
-                                if not self.is_user_white:
-                                    k1 = 'b_elapse_k'
-                                    k2 = 'b_base_time_k'
-
-                                # Update elapse box
-                                elapse_str = self.get_time_mm_ss_ms(
-                                    human_timer.elapse)
-                                window.Element(k1).Update(elapse_str)
-
-                                # Update remaining time box
-                                elapse_str = self.get_time_h_mm_ss(
-                                    human_timer.base)
-                                window.Element(k2).Update(elapse_str)
-
-                                window.Element('advise_info_k').Update('')
-
-                            # Else if move is illegal
-                            else:
-                                move_state = 0
-                                color = self.sq_dark_color \
-                                    if (move_from[0] + move_from[1]) % 2 else self.sq_light_color
-
-                                # Restore the color of the fr square
-                                button_square.Update(button_color=('white', color))
-                                continue
+                        (
+                            move_from,
+                            move_to,
+                            move_state,
+                            moved_piece,
+                            piece,
+                            should_continue,
+                            is_human_stm,
+                            fr_row,
+                            fr_col,
+                            to_row,
+                            to_col,
+                            is_promote,
+                            psg_promo,
+                            piece,
+                        ) = self.handle_click_on_board(
+                            window=window,
+                            board=board,
+                            move_state=move_state,
+                            button=button,
+                            move_from=move_from,
+                            move_to=move_to,
+                            fr_row=fr_row,
+                            fr_col=fr_col,
+                            to_row=to_row,
+                            to_col=to_col,
+                            move_cnt=move_cnt,
+                            human_timer=human_timer,
+                            value=value,
+                            moved_piece=moved_piece,
+                            is_promote=is_promote,
+                            psg_promo=psg_promo,
+                            piece=piece,
+                            is_human_stm=is_human_stm,
+                        )
+    
+                        if should_continue:
+                            continue
 
                 if is_new_game or is_exit_game or is_exit_app or \
                     is_user_resigns or is_user_wins or is_user_draws:
@@ -1948,7 +2167,7 @@ class EasyChessGui:
 
         board_tab = [[sg.Column(board_layout)]]
 
-        self.menu_elem = sg.Menu(menu_def_neutral, tearoff=False)
+        self.menu_elem = sg.Menu(MENU_DEF_NEUTRAL, tearoff=False)
 
         # White board layout, mode: Neutral
         layout = [
@@ -2947,7 +3166,7 @@ class EasyChessGui:
                     continue
                     
                 # Change menu from Neutral to Play
-                self.menu_elem.Update(menu_def_play)
+                self.menu_elem.Update(MENU_DEF_PLAY)
                 self.psg_board = copy.deepcopy(initial_board)
                 board = chess.Board()
 
@@ -2970,7 +3189,7 @@ class EasyChessGui:
                         break
 
                 # Restore Neutral menu
-                self.menu_elem.Update(menu_def_neutral)
+                self.menu_elem.Update(MENU_DEF_NEUTRAL)
                 self.psg_board = copy.deepcopy(initial_board)
                 board = chess.Board()
                 self.set_new_game()
