@@ -53,19 +53,26 @@ def main():
     engine_config_file = ROOT_PATH / 'pecg_engines.json'
     user_config_file = ROOT_PATH / 'pecg_user.json'
 
-    pecg_book = BOOK_PATH / 'pecg_book.bin'
-    book_from_computer_games = BOOK_PATH / 'computer.bin'
-    book_from_human_games = BOOK_PATH / 'human.bin'
+    gui_book_file = BOOK_PATH / 'pecg_book.bin'
+    computer_book_file = BOOK_PATH / 'computer.bin'
+    human_book_file = BOOK_PATH / 'human.bin'
 
     is_use_gui_book = True
     is_random_book = True  # If false then use best book move
     max_book_ply = 8
     theme = 'Reddit'
 
-    pecg = EasyChessGui(theme, engine_config_file, user_config_file,
-                        pecg_book, book_from_computer_games,
-                        book_from_human_games, is_use_gui_book, is_random_book,
-                        max_book_ply)
+    pecg = EasyChessGui(
+        theme=theme,
+        engine_config_file=engine_config_file,
+        user_config_file=user_config_file,
+        gui_book_file=gui_book_file,
+        computer_book_file=computer_book_file,
+        human_book_file=human_book_file,
+        is_use_gui_book=is_use_gui_book,
+        is_random_book=is_random_book,
+        max_book_ply=max_book_ply,
+    )
 
     pecg.main_loop()
 

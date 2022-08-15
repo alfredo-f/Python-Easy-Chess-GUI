@@ -151,6 +151,7 @@ MENU_DEF_NEUTRAL = [
         "&Mode",
         [
             UI_BUTTON_MODE_PLAY,
+            UI_BUTTON_MODE_TRAIN_OPENINGS,
         ],
     ],
     [
@@ -206,15 +207,29 @@ MENU_DEF_PLAY = [
     ["&Help", ["About"]],
 ]
 
+MENU_DEF_TRAIN_OPENINGS = [
+    ["&Mode", [UI_BUTTON_MODE_NEUTRAL]],
+    ["&Help", ["About"]],
+]
+
 
 class EasyChessGui:
     queue = queue.Queue()
     is_user_white = True  # White is at the bottom in board layout
 
-    def __init__(self, theme, engine_config_file, user_config_file,
-                 gui_book_file, computer_book_file, human_book_file,
-                 is_use_gui_book, is_random_book, max_book_ply,
-                 max_depth=MAX_DEPTH):
+    def __init__(
+        self,
+        theme,
+        engine_config_file,
+        user_config_file,
+        gui_book_file,
+        computer_book_file,
+        human_book_file,
+        is_use_gui_book,
+        is_random_book,
+        max_book_ply,
+        max_depth=MAX_DEPTH,
+    ):
         self.theme = theme
         self.user_config_file = user_config_file
         self.engine_config_file = engine_config_file
@@ -557,7 +572,7 @@ class EasyChessGui:
             if 'info_all' in msg_str:
                 info_all = ' '.join(msg_str.split()[0:-1]).strip()
                 msg_line = '{}\n'.format(info_all)
-                window.find_element('search_info_all_k').Update(
+                window.find_element(UI_KEY_OPPONENT_SEARCH_ALL).Update(
                         '' if is_hide else msg_line)
         else:
             # Best move can be None because engine dies
@@ -600,13 +615,13 @@ class EasyChessGui:
         """ Update player names """
         engine_id = self.opp_id_name
         if self.is_user_white:
-            window.find_element('_White_').Update(human)
-            window.find_element('_Black_').Update(engine_id)
+            window.find_element(UI_KEY_WHITE).Update(human)
+            window.find_element(UI_KEY_BLACK).Update(engine_id)
             self.game.headers['White'] = human
             self.game.headers['Black'] = engine_id
         else:
-            window.find_element('_White_').Update(engine_id)
-            window.find_element('_Black_').Update(human)
+            window.find_element(UI_KEY_WHITE).Update(engine_id)
+            window.find_element(UI_KEY_BLACK).Update(human)
             self.game.headers['White'] = engine_id
             self.game.headers['Black'] = human
 
@@ -883,7 +898,7 @@ class EasyChessGui:
         elapse_str = get_time_h_mm_ss(timer.base)
         is_white_base = self.is_user_white and name == 'human' or \
                 not self.is_user_white and name != 'human'
-        window.Element('w_base_time_k' if is_white_base else 'b_base_time_k').Update(
+        window.Element(UI_KEY_TIME_BASE_WHITE if is_white_base else UI_KEY_TIME_BASE_BLACK).Update(
                 elapse_str)
             
         return timer
@@ -1578,8 +1593,8 @@ class EasyChessGui:
         :param board: current board position
         :return:
         """
-        window.find_element('_movelist_').Update(disabled=False)
-        window.find_element('_movelist_').Update('', disabled=True)
+        window.find_element(UI_KEY_MOVE_LIST).Update(disabled=False)
+        window.find_element(UI_KEY_MOVE_LIST).Update('', disabled=True)
 
         is_human_stm = True if self.is_user_white else False
 
@@ -1626,16 +1641,16 @@ class EasyChessGui:
 
             # Mode: Play, Hide book 1
             if is_hide_book1:
-                window.Element('polyglot_book1_k').Update('')
+                window.Element(UI_KEY_BOOK_COMPUTER).Update('')
             else:
                 # Load 2 polyglot book files
                 ref_book1 = GuiBook(self.computer_book_file, board,
                                     self.is_random_book)
                 all_moves, is_found = ref_book1.get_all_moves()
                 if is_found:
-                    window.Element('polyglot_book1_k').Update(all_moves)
+                    window.Element(UI_KEY_BOOK_COMPUTER).Update(all_moves)
                 else:
-                    window.Element('polyglot_book1_k').Update('no book moves')
+                    window.Element(UI_KEY_BOOK_COMPUTER).Update('no book moves')
 
             # Mode: Play, Hide book 2
             if is_hide_book2:
@@ -1723,9 +1738,9 @@ class EasyChessGui:
 
                     # Update elapse box in m:s format
                     elapse_str = get_time_mm_ss_ms(human_timer.elapse)
-                    k = 'w_elapse_k'
+                    k = UI_KEY_TIME_ELAPSED_WHITE
                     if not self.is_user_white:
-                        k = 'b_elapse_k'
+                        k = UI_KEY_TIME_ELAPSED_BLACK
                     window.Element(k).Update(elapse_str)
                     human_timer.elapse += 100
 
@@ -1991,58 +2006,9 @@ class EasyChessGui:
 
         # Define board
         board_layout = self.create_board(is_user_white)
-
-        board_controls = [
-            [sg.Text('Mode     Neutral', size=(36, 1), font=('Consolas', 10), key='_gamestatus_')],
-            [sg.Text('White', size=(7, 1), font=('Consolas', 10)),
-             sg.Text('Human', font=('Consolas', 10), key='_White_',
-                     size=(24, 1), relief='sunken'),
-             sg.Text('', font=('Consolas', 10), key='w_base_time_k',
-                     size=(11, 1), relief='sunken'),
-             sg.Text('', font=('Consolas', 10), key='w_elapse_k', size=(7, 1),
-                     relief='sunken')
-             ],
-            [sg.Text('Black', size=(7, 1), font=('Consolas', 10)),
-             sg.Text('Computer', font=('Consolas', 10), key='_Black_',
-                     size=(24, 1), relief='sunken'),
-             sg.Text('', font=('Consolas', 10), key='b_base_time_k',
-                     size=(11, 1), relief='sunken'),
-             sg.Text('', font=('Consolas', 10), key='b_elapse_k', size=(7, 1),
-                     relief='sunken')
-             ],
-            [sg.Text('Adviser', size=(7, 1), font=('Consolas', 10), key='adviser_k',
-                     right_click_menu=['Right',
-                         ['Start::right_adviser_k', 'Stop::right_adviser_k']]),
-             sg.Text('', font=('Consolas', 10), key='advise_info_k', relief='sunken',
-                     size=(46,1))],
-
-            [sg.Text('Move list', size=(16, 1), font=('Consolas', 10))],
-            [sg.Multiline('', do_not_clear=True, autoscroll=True, size=(52, 8),
-                    font=('Consolas', 10), key='_movelist_', disabled=True)],
-
-            [sg.Text('Comment', size=(7, 1), font=('Consolas', 10))],
-            [sg.Multiline('', do_not_clear=True, autoscroll=True, size=(52, 3),
-                    font=('Consolas', 10), key='comment_k')],
-
-            [sg.Text('BOOK 1, Comp games', size=(26, 1),
-                     font=('Consolas', 10),
-                     right_click_menu=['Right',
-                         ['Show::right_book1_k', 'Hide::right_book1_k']]),
-             sg.Text('BOOK 2, Human games',
-                     font=('Consolas', 10),
-                     right_click_menu=['Right',
-                         ['Show::right_book2_k', 'Hide::right_book2_k']])],
-            [sg.Multiline('', do_not_clear=True, autoscroll=False, size=(23, 4),
-                    font=('Consolas', 10), key='polyglot_book1_k', disabled=True),
-             sg.Multiline('', do_not_clear=True, autoscroll=False, size=(25, 4),
-                    font=('Consolas', 10), key='polyglot_book2_k', disabled=True)],
-
-            [sg.Text('Opponent Search Info', font=('Consolas', 10), size=(30, 1),
-                     right_click_menu=['Right',
-                         ['Show::right_search_info_k', 'Hide::right_search_info_k']])],
-            [sg.Text('', key='search_info_all_k', size=(55, 1),
-                     font=('Consolas', 10), relief='sunken')],
-        ]
+        
+        board_controls_play = create_board_controls_play()
+        board_controls_train_openings = create_board_controls_train_openings()
 
         board_tab = [[sg.Column(board_layout)]]
 
@@ -2050,8 +2016,22 @@ class EasyChessGui:
 
         # White board layout, mode: Neutral
         layout = [
-                [self.menu_elem],
-                [sg.Column(board_tab), sg.Column(board_controls)]
+            [self.menu_elem],
+            [
+                sg.Column(
+                    board_tab,
+                    key=UI_KEY_BOARD_MAIN,
+                ),
+                sg.Column(
+                    board_controls_play,
+                    key=UI_KEY_CONTROLS_PLAY,
+                ),
+                sg.Column(
+                    board_controls_train_openings,
+                    key=UI_KEY_CONTROLS_TRAIN_OPENINGS,
+                    visible=False,
+                ),
+            ]
         ]
 
         return layout
@@ -2085,7 +2065,99 @@ class EasyChessGui:
             logging.exception('Error in getting opponent engine!')
             
         return engine_id_name
+    
+    def read_lines_openings(
+        self,
+        stm: str,
+    ):
+        pgn = chess.pgn.read_game(
+            open(
+                r"C:\Users\a.fomitchenko\PycharmProjects\Python-Easy-Chess-GUI\python_easy_chess_gui\train_openings\pgns\black\a.pgn"
+            )
+        )
+        
+        return pgn
+    
+    def train_openings(self, window):
+        """
+        User can play a game against and engine.
 
+        :param window:
+        :param board: current board position
+        :return:
+        """
+        while True:
+            event, event_values = window.Read(timeout=100)
+            if event == sg.EVENT_TIMEOUT:
+                continue
+            
+            elif event == _TEST__UI_KEY_CONTROLS_TRAIN_OPENINGS_EXIT:
+                break
+                
+            elif True or event == UI_KEY_BUTTON_TRAIN_OPENINGS_SIDE:
+                stm = event_values[UI_KEY_BUTTON_TRAIN_OPENINGS_SIDE]
+                
+                self.lines = self.read_lines_openings(
+                    stm=stm,
+                )
+                
+    def switch_layout_to_train_openings(
+        self,
+        window,
+    ):
+        # Change menu from Neutral to Train Openings
+        self.menu_elem.Update(MENU_DEF_TRAIN_OPENINGS)
+        self.psg_board = copy.deepcopy(initial_board)
+        
+        window.Read(timeout=100)
+
+        window.find_element(UI_KEY_CONTROLS_PLAY).update(
+            visible=False
+        )
+        window.find_element(UI_KEY_CONTROLS_TRAIN_OPENINGS).update(
+            visible=True
+        )
+        
+    def switch_layout_to_neutral(
+        self,
+        window,
+    ):
+        window.find_element(UI_KEY_CONTROLS_PLAY).update(
+            visible=True
+        )
+        window.find_element(UI_KEY_CONTROLS_TRAIN_OPENINGS).update(
+            visible=False
+        )
+    
+        window.find_element(UI_KEY_GAME_STATUS).Update(
+            UI_STATIC_MODE_NEUTRAL
+        )
+    
+        self.psg_board = copy.deepcopy(initial_board)
+        self.redraw_board(window)
+        self.set_new_game()
+    
+        # Restore Neutral menu
+        self.menu_elem.Update(MENU_DEF_NEUTRAL)
+        self.psg_board = copy.deepcopy(initial_board)
+        self.set_new_game()
+
+    def handle_button_train_openings(
+        self,
+        window,
+    ):
+        self.switch_layout_to_train_openings(
+            window=window,
+        )
+
+        self.train_openings(
+            window,
+        )
+        
+        self.switch_layout_to_neutral(
+            window=window,
+        )
+    
     def main_loop(self):
         """
         Build GUI, read user and engine config files and take user inputs.
@@ -3054,7 +3126,7 @@ class EasyChessGui:
 
             # Mode: Neutral
             if button == 'Flip':
-                window.find_element('_gamestatus_').Update('Mode     Neutral')
+                window.find_element(UI_KEY_GAME_STATUS).Update(UI_STATIC_MODE_NEUTRAL)
                 clear_elements(window)
                 window = self.create_new_window(window, True)
                 continue
@@ -3065,7 +3137,7 @@ class EasyChessGui:
                 continue
 
             # Mode: Neutral
-            if button == 'Play':
+            if button == UI_BUTTON_MODE_PLAY:
                 if engine_id_name is None:
                     logging.warning('Install engine first!')
                     sg.Popup('Install engine first! in Engine/Manage/Install',
@@ -3080,12 +3152,12 @@ class EasyChessGui:
                 while True:
                     button, value = window.Read(timeout=100)
 
-                    window.find_element('_gamestatus_').Update('Mode     Play')
-                    window.find_element('_movelist_').Update(disabled=False)
-                    window.find_element('_movelist_').Update('', disabled=True)
+                    window.find_element(UI_KEY_GAME_STATUS).Update(UI_STATIC_MODE_PLAY)
+                    window.find_element(UI_KEY_MOVE_LIST).Update(disabled=False)
+                    window.find_element(UI_KEY_MOVE_LIST).Update('', disabled=True)
 
                     start_new_game = self.play_game(window, engine_id_name, board)
-                    window.find_element('_gamestatus_').Update('Mode     Neutral')
+                    window.find_element(UI_KEY_GAME_STATUS).Update(UI_STATIC_MODE_NEUTRAL)
 
                     self.psg_board = copy.deepcopy(initial_board)
                     self.redraw_board(window)
@@ -3102,4 +3174,217 @@ class EasyChessGui:
                 self.set_new_game()
                 continue
 
+            # Mode: Neutral
+            if button == UI_BUTTON_MODE_TRAIN_OPENINGS:
+                self.handle_button_train_openings(
+                    window=window,
+                )
+                continue
+
         window.Close()
+
+
+def create_board_controls_train_openings():
+    board_controls = [
+        [
+            sg.Combo(
+                UI_BUTTON_TRAIN_OPENINGS_SIDE_ALL,
+                key=UI_KEY_BUTTON_TRAIN_OPENINGS_SIDE,
+                enable_events=True,
+            )
+        ],
+        [
+            sg.Button(
+                "Exit",
+                key=_TEST__UI_KEY_CONTROLS_TRAIN_OPENINGS_EXIT,
+            )
+        ],
+    ]
+    
+    return board_controls
+
+
+def create_board_controls_play():
+    side_white = sg.Text(
+        'Human',
+        font=('Consolas', 10),
+        key=UI_KEY_WHITE,
+        size=(24, 1),
+        relief='sunken',
+    )
+    
+    side_black = sg.Text(
+        'Computer',
+        font=('Consolas', 10),
+        key=UI_KEY_BLACK,
+        size=(24, 1),
+        relief='sunken',
+    )
+    
+    board_controls = [
+        [
+            sg.Text(
+                UI_STATIC_MODE_NEUTRAL,
+                size=(36, 1),
+                font=('Consolas', 10),
+                key=UI_KEY_GAME_STATUS,
+            )
+        ],
+        [
+            sg.Text('White', size=(7, 1), font=('Consolas', 10)),
+            side_white,
+            sg.Text(
+                '',
+                font=('Consolas', 10),
+                key=UI_KEY_TIME_BASE_WHITE,
+                size=(11, 1),
+                relief='sunken',
+            ),
+            sg.Text(
+                '',
+                font=('Consolas', 10),
+                key=UI_KEY_TIME_ELAPSED_WHITE,
+                size=(7, 1),
+                relief='sunken',
+            ),
+        ],
+        [
+            sg.Text('Black', size=(7, 1), font=('Consolas', 10)),
+            side_black,
+            sg.Text(
+                '',
+                font=('Consolas', 10),
+                key=UI_KEY_TIME_BASE_BLACK,
+                size=(11, 1),
+                relief='sunken',
+            ),
+            sg.Text(
+                '',
+                font=('Consolas', 10),
+                key=UI_KEY_TIME_ELAPSED_BLACK,
+                size=(7, 1),
+                relief='sunken',
+            ),
+        ],
+        [
+            sg.Text(
+                'Adviser',
+                size=(7, 1),
+                font=('Consolas', 10),
+                key=UI_KEY_ADVISER_MAIN,
+                right_click_menu=[
+                    'Right',
+                    ['Start::right_adviser_k', 'Stop::right_adviser_k'],
+                ],
+            ),
+            sg.Text(
+                '',
+                font=('Consolas', 10),
+                key=UI_KEY_ADVISER_INFO,
+                relief='sunken',
+                size=(46, 1),
+            ),
+        ],
+        [
+            sg.Text(
+                'Move list',
+                key=UI_KEY_MOVE_LIST_TITLE,
+                size=(16, 1),
+                font=('Consolas', 10),
+            ),
+        ],
+        [
+            sg.Multiline(
+                '',
+                do_not_clear=True,
+                autoscroll=True,
+                size=(52, 8),
+                font=('Consolas', 10),
+                key=UI_KEY_MOVE_LIST,
+                disabled=True,
+            )
+        ],
+        [
+            sg.Text(
+                'Comment',
+                key=UI_KEY_COMMENT_TITLE,
+                size=(7, 1),
+                font=('Consolas', 10),
+            ),
+        ],
+        [
+            sg.Multiline(
+                '',
+                do_not_clear=True,
+                autoscroll=True,
+                size=(52, 3),
+                font=('Consolas', 10),
+                key=UI_KEY_COMMENT,
+            )
+        ],
+        [
+            sg.Text(
+                'BOOK 1, Comp games',
+                key=UI_KEY_BOOK_COMPUTER_TITLE,
+                size=(26, 1),
+                font=('Consolas', 10),
+                right_click_menu=[
+                    'Right',
+                    ['Show::right_book1_k', 'Hide::right_book1_k'],
+                ],
+            ),
+            sg.Text(
+                'BOOK 2, Human games',
+                key=UI_KEY_BOOK_HUMAN_TITLE,
+                font=('Consolas', 10),
+                right_click_menu=[
+                    'Right',
+                    ['Show::right_book2_k', 'Hide::right_book2_k'],
+                ],
+            ),
+        ],
+        [
+            sg.Multiline(
+                '',
+                do_not_clear=True,
+                autoscroll=False,
+                size=(23, 4),
+                font=('Consolas', 10),
+                key=UI_KEY_BOOK_COMPUTER,
+                disabled=True,
+            ),
+            sg.Multiline(
+                '',
+                do_not_clear=True,
+                autoscroll=False,
+                size=(25, 4),
+                font=('Consolas', 10),
+                key=UI_KEY_BOOK_HUMAN,
+                disabled=True,
+            ),
+        ],
+        [
+            sg.Text(
+                'Opponent Search Info',
+                key=UI_KEY_OPPONENT_SEARCH_ALL_TITLE,
+                font=('Consolas', 10),
+                size=(30, 1),
+                right_click_menu=[
+                    'Right',
+                    ['Show::right_search_info_k',
+                        'Hide::right_search_info_k'],
+                ],
+            )
+        ],
+        [
+            sg.Text(
+                '',
+                key=UI_KEY_OPPONENT_SEARCH_ALL,
+                size=(55, 1),
+                font=('Consolas', 10),
+                relief='sunken',
+            )
+        ],
+    ]
+    
+    return board_controls
