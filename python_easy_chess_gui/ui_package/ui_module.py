@@ -1756,6 +1756,9 @@ class EasyChessGui:
                     is_search_stop_for_user_draws=is_search_stop_for_user_draws,
                 )
                 
+                if should_break:
+                    break
+                
         # Auto-save game
         logging.info('Saving game automatically')
         if is_user_resigns:
