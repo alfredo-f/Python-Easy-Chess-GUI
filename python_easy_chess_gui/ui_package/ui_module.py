@@ -1311,6 +1311,264 @@ class EasyChessGui:
             is_search_stop_for_user_draws,
         )
 
+    def handle_breaking_buttons_on_human_stm(
+        self,
+        button,
+        board,
+        window,
+        msg_line,
+        is_hide_search_info,
+        is_hide_book1,
+        is_hide_book2,
+        is_exit_app,
+        is_new_game,
+        is_search_stop_for_exit,
+        is_search_stop_for_new_game,
+    ):
+        should_break = False
+        
+        # Mode: Play, Stm: User, Run adviser engine
+        if button == 'Start::right_adviser_k':
+            self.adviser_threads = get_engine_threads(
+                self.adviser_id_name,
+                engine_config_file=self.engine_config_file,
+            )
+            self.adviser_hash = get_engine_hash(
+                self.adviser_id_name,
+                engine_config_file=self.engine_config_file,
+            )
+            adviser_base_ms = self.adviser_movetime_sec * 1000
+            adviser_inc_ms = 0
+        
+            search = RunEngine(
+                self.queue, self.engine_config_file,
+                self.adviser_path_and_file, self.adviser_id_name,
+                self.max_depth, adviser_base_ms, adviser_inc_ms,
+                tc_type='timepermove',
+                period_moves=0,
+                is_stream_search_info=True
+                )
+            search.get_board(board)
+            search.daemon = True
+            search.start()
+        
+            while True:
+                button, value = window.Read(timeout=10)
+            
+                if button == 'Stop::right_adviser_k':
+                    search.stop()
+            
+                # Exit app while adviser is thinking
+                if button is None:
+                    search.stop()
+                    is_search_stop_for_exit = True
+                try:
+                    msg = self.queue.get_nowait()
+                    if 'pv' in msg:
+                        # Reformat msg, remove the word pv at the end
+                        msg_line = ' '.join(msg.split()[0:-1])
+                        window.Element('advise_info_k').Update(msg_line)
+                except Exception:
+                    continue
+            
+                if 'bestmove' in msg:
+                    # bestmove can be None so we do try/except
+                    try:
+                        # Shorten msg line to 3 ply moves
+                        msg_line = ' '.join(msg_line.split()[0:3])
+                        msg_line += ' - ' + self.adviser_id_name
+                        window.Element('advise_info_k').Update(msg_line)
+                    except Exception:
+                        logging.exception('Adviser engine error')
+                        sg.Popup(
+                            'Adviser engine {} error.\n'.format(
+                                self.adviser_id_name
+                            ) + \
+                            'It is better to change this engine.\n' +
+                            'Change to Neutral mode first.',
+                            icon=ico_path[platform]['pecg'],
+                            title=BOX_TITLE
+                            )
+                    break
+        
+            search.join()
+            search.quit_engine()
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Show::right_search_info_k':
+            is_hide_search_info = False
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Hide::right_search_info_k':
+            is_hide_search_info = True
+            window.Element('search_info_all_k').Update('')
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Show::right_book1_k':
+            is_hide_book1 = False
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Hide::right_book1_k':
+            is_hide_book1 = True
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Show::right_book2_k':
+            is_hide_book2 = False
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Hide::right_book2_k':
+            is_hide_book2 = True
+            should_break = True
+    
+        elif button is None:
+            logging.info('Quit app X is pressed.')
+            is_exit_app = True
+            should_break = True
+    
+        elif is_search_stop_for_exit:
+            is_exit_app = True
+            should_break = True
+    
+        # Mode: Play, Stm: User
+        elif button == 'New::new_game_k' or is_search_stop_for_new_game:
+            is_new_game = True
+            clear_elements(window)
+            should_break = True
+    
+        elif button == 'Save to My Games::save_game_k':
+            logging.info('Saving game manually')
+            with open(self.my_games, mode='a+') as f:
+                self.game.headers['Event'] = 'My Games'
+                f.write('{}\n\n'.format(self.game))
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Save to White Repertoire':
+            with open(self.repertoire_file['white'], mode='a+') as f:
+                self.game.headers['Event'] = 'White Repertoire'
+                f.write('{}\n\n'.format(self.game))
+            should_break = True
+    
+        # Mode: Play, Stm: user
+        elif button == 'Save to Black Repertoire':
+            with open(self.repertoire_file['black'], mode='a+') as f:
+                self.game.headers['Event'] = 'Black Repertoire'
+                f.write('{}\n\n'.format(self.game))
+            should_break = True
+        
+        return (
+            should_break,
+            is_hide_search_info,
+            is_hide_book1,
+            is_hide_book2,
+            is_exit_app,
+            is_new_game,
+        )
+    
+    def handle_breaking_buttons_on_human_stm_2(
+        self,
+        button,
+        window,
+        board,
+        is_search_stop_for_user_wins,
+        is_search_stop_for_user_draws,
+        is_search_stop_for_neutral,
+        is_user_wins,
+        is_user_draws,
+        is_exit_game,
+        is_human_stm,
+        is_engine_ready,
+    ):
+        should_break = False
+        should_continue = False
+        
+        # Mode: Play, stm: User
+        if button == 'User Wins::user_wins_k' or is_search_stop_for_user_wins:
+            logging.info('User wins by adjudication')
+            is_user_wins = True
+            should_break = True
+    
+        # Mode: Play, stm: User
+        elif button == 'User Draws::user_draws_k' or is_search_stop_for_user_draws:
+            logging.info('User draws by adjudication')
+            is_user_draws = True
+            should_break = True
+    
+        # Mode: Play, Stm: User
+        elif button == 'Neutral' or is_search_stop_for_neutral:
+            is_exit_game = True
+            clear_elements(window)
+            should_break = True
+    
+        # Mode: Play, stm: User
+        elif button == 'About':
+            sg.PopupScrolled(HELP_MSG, title=BOX_TITLE, )
+            should_break = True
+    
+        # Mode: Play, stm: User
+        elif button == 'Go':
+            if is_human_stm:
+                is_human_stm = False
+            else:
+                is_human_stm = True
+            is_engine_ready = True
+            window.find_element('_gamestatus_').Update(
+                'Mode     Play, Engine is thinking ...'
+            )
+            should_break = True
+    
+        # Mode: Play, stm: User
+        elif button == 'Paste':
+            # Pasting fen is only allowed before the game starts.
+            if len(self.game.variations):
+                sg.Popup(
+                    'Press Game->New then paste your fen.',
+                    title='Mode Play'
+                    )
+                should_continue = True
+                
+        if not should_continue:
+            if button == 'Paste':
+                try:
+                    self.get_fen()
+                    self.set_new_game()
+                    board = chess.Board(self.fen)
+                except Exception:
+                    logging.exception('Error in parsing FEN from clipboard.')
+                    should_continue = True
+                    
+        if not should_continue:
+            if button == 'Paste':
+                self.fen_to_psg_board(window)
+            
+                is_human_stm = True if board.turn else False
+                is_engine_ready = True if is_human_stm else False
+            
+                window.find_element('_gamestatus_').Update(
+                    'Mode     Play, side: {}'.format(
+                        'white' if board.turn else 'black'
+                    )
+                )
+            
+                self.game.headers['FEN'] = self.fen
+                should_break = True
+            
+        return (
+            should_break,
+            should_continue,
+            is_user_wins,
+            is_user_draws,
+            is_exit_game,
+            is_human_stm,
+            is_engine_ready,
+        )
+
     def play_game(self, window, engine_id_name, board):
         """
         User can play a game against and engine.
@@ -1359,6 +1617,8 @@ class EasyChessGui:
         is_promote = None
         psg_promo = None
         piece = None
+
+        msg_line = None
 
         # Game loop
         while not board.is_game_over(claim_draw=True):
@@ -1471,137 +1731,31 @@ class EasyChessGui:
 
                     if not is_human_stm:
                         break
-
-                    # Mode: Play, Stm: User, Run adviser engine
-                    if button == 'Start::right_adviser_k':
-                        self.adviser_threads = get_engine_threads(
-                            self.adviser_id_name,
-                            engine_config_file=self.engine_config_file,
-                        )
-                        self.adviser_hash = get_engine_hash(
-                            self.adviser_id_name,
-                            engine_config_file=self.engine_config_file,
-                        )
-                        adviser_base_ms = self.adviser_movetime_sec * 1000
-                        adviser_inc_ms = 0
-
-                        search = RunEngine(self.queue, self.engine_config_file,
-                            self.adviser_path_and_file, self.adviser_id_name,
-                            self.max_depth, adviser_base_ms, adviser_inc_ms,
-                                           tc_type='timepermove',
-                                           period_moves=0,
-                                           is_stream_search_info=True)
-                        search.get_board(board)
-                        search.daemon = True
-                        search.start()
-
-                        while True:
-                            button, value = window.Read(timeout=10)
-
-                            if button == 'Stop::right_adviser_k':
-                                search.stop()
-
-                            # Exit app while adviser is thinking
-                            if button is None:
-                                search.stop()
-                                is_search_stop_for_exit = True
-                            try:
-                                msg = self.queue.get_nowait()
-                                if 'pv' in msg:
-                                    # Reformat msg, remove the word pv at the end
-                                    msg_line = ' '.join(msg.split()[0:-1])
-                                    window.Element('advise_info_k').Update(msg_line)
-                            except Exception:
-                                continue
-
-                            if 'bestmove' in msg:
-                                # bestmove can be None so we do try/except
-                                try:
-                                    # Shorten msg line to 3 ply moves
-                                    msg_line = ' '.join(msg_line.split()[0:3])
-                                    msg_line += ' - ' + self.adviser_id_name
-                                    window.Element('advise_info_k').Update(msg_line)
-                                except Exception:
-                                    logging.exception('Adviser engine error')
-                                    sg.Popup('Adviser engine {} error.\n'.format(
-                                            self.adviser_id_name) + \
-                                            'It is better to change this engine.\n' +
-                                            'Change to Neutral mode first.',
-                                            icon=ico_path[platform]['pecg'],
-                                            title=BOX_TITLE)
-                                break
-
-                        search.join()
-                        search.quit_engine()
+                    
+                    (
+                        should_break,
+                        is_hide_search_info,
+                        is_hide_book1,
+                        is_hide_book2,
+                        is_exit_app,
+                        is_new_game,
+                    ) = self.handle_breaking_buttons_on_human_stm(
+                        button=button,
+                        board=board,
+                        window=window,
+                        msg_line=msg_line,
+                        is_hide_search_info=is_hide_search_info,
+                        is_hide_book1=is_hide_book1,
+                        is_hide_book2=is_hide_book2,
+                        is_exit_app=is_exit_app,
+                        is_new_game=is_new_game,
+                        is_search_stop_for_exit=is_search_stop_for_exit,
+                        is_search_stop_for_new_game=is_search_stop_for_new_game,
+                    )
+                    
+                    if should_break:
                         break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Show::right_search_info_k':
-                        is_hide_search_info = False
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Hide::right_search_info_k':
-                        is_hide_search_info = True
-                        window.Element('search_info_all_k').Update('')
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Show::right_book1_k':
-                        is_hide_book1 = False
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Hide::right_book1_k':
-                        is_hide_book1 = True
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Show::right_book2_k':
-                        is_hide_book2 = False
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Hide::right_book2_k':
-                        is_hide_book2 = True
-                        break
-
-                    if button is None:
-                        logging.info('Quit app X is pressed.')
-                        is_exit_app = True
-                        break
-
-                    if is_search_stop_for_exit:
-                        is_exit_app = True
-                        break
-
-                    # Mode: Play, Stm: User
-                    if button == 'New::new_game_k' or is_search_stop_for_new_game:
-                        is_new_game = True
-                        clear_elements(window)
-                        break
-
-                    if button == 'Save to My Games::save_game_k':
-                        logging.info('Saving game manually')
-                        with open(self.my_games, mode = 'a+') as f:
-                            self.game.headers['Event'] = 'My Games'
-                            f.write('{}\n\n'.format(self.game))
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Save to White Repertoire':
-                        with open(self.repertoire_file['white'], mode = 'a+') as f:
-                            self.game.headers['Event'] = 'White Repertoire'
-                            f.write('{}\n\n'.format(self.game))
-                        break
-
-                    # Mode: Play, Stm: user
-                    if button == 'Save to Black Repertoire':
-                        with open(self.repertoire_file['black'], mode = 'a+') as f:
-                            self.game.headers['Event'] = 'Black Repertoire'
-                            f.write('{}\n\n'.format(self.game))
-                        break
-
+                    
                     # Mode: Play, stm: User
                     if button == 'Resign::resign_game_k' or is_search_stop_for_resign:
                         logging.info('User resigns')
@@ -1619,67 +1773,34 @@ class EasyChessGui:
                                 is_search_stop_for_resign = False
                             continue
 
-                    # Mode: Play, stm: User
-                    if button == 'User Wins::user_wins_k' or is_search_stop_for_user_wins:
-                        logging.info('User wins by adjudication')
-                        is_user_wins = True
+                    (
+                        should_break,
+                        should_continue,
+                        is_user_wins,
+                        is_user_draws,
+                        is_exit_game,
+                        is_human_stm,
+                        is_engine_ready,
+                    ) = self.handle_breaking_buttons_on_human_stm_2(
+                        button=button,
+                        window=window,
+                        board=board,
+                        is_search_stop_for_user_wins=is_search_stop_for_user_wins,
+                        is_search_stop_for_user_draws=is_search_stop_for_user_draws,
+                        is_search_stop_for_neutral=is_search_stop_for_neutral,
+                        is_user_wins=is_user_wins,
+                        is_user_draws=is_user_draws,
+                        is_exit_game=is_exit_game,
+                        is_human_stm=is_human_stm,
+                        is_engine_ready=is_engine_ready,
+                    )
+                    
+                    if should_continue:
+                        continue
+                        
+                    if should_break:
                         break
-
-                    # Mode: Play, stm: User
-                    if button == 'User Draws::user_draws_k' or is_search_stop_for_user_draws:
-                        logging.info('User draws by adjudication')
-                        is_user_draws = True
-                        break
-
-                    # Mode: Play, Stm: User
-                    if button == 'Neutral' or is_search_stop_for_neutral:
-                        is_exit_game = True
-                        clear_elements(window)
-                        break
-
-                    # Mode: Play, stm: User
-                    if button == 'About':
-                        sg.PopupScrolled(HELP_MSG, title=BOX_TITLE,)
-                        break
-
-                    # Mode: Play, stm: User
-                    if button == 'Go':
-                        if is_human_stm:
-                            is_human_stm = False
-                        else:
-                            is_human_stm = True
-                        is_engine_ready = True
-                        window.find_element('_gamestatus_').Update(
-                                'Mode     Play, Engine is thinking ...')
-                        break
-
-                    # Mode: Play, stm: User
-                    if button == 'Paste':
-                        # Pasting fen is only allowed before the game starts.
-                        if len(self.game.variations):
-                            sg.Popup('Press Game->New then paste your fen.',
-                                     title='Mode Play')
-                            continue
-                        try:
-                            self.get_fen()
-                            self.set_new_game()
-                            board = chess.Board(self.fen)
-                        except Exception:
-                            logging.exception('Error in parsing FEN from clipboard.')
-                            continue
-
-                        self.fen_to_psg_board(window)
-
-                        is_human_stm = True if board.turn else False
-                        is_engine_ready = True if is_human_stm else False
-
-                        window.find_element('_gamestatus_').Update(
-                                'Mode     Play, side: {}'.format(
-                                        'white' if board.turn else 'black'))
-
-                        self.game.headers['FEN'] = self.fen
-                        break
-
+                    
                     # Mode: Play, stm: User, user starts moving
                     if type(button) is tuple:
                         (
