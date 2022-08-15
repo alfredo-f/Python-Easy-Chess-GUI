@@ -7,7 +7,6 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
 from pathlib import Path, PurePath
 
 import PySimpleGUI as sg
@@ -51,6 +50,26 @@ from python_easy_chess_gui.config import (
 from python_easy_chess_gui.engine_package.engine_module import RunEngine
 from python_easy_chess_gui.play_package.play_module import (
     Timer, GuiBook,
+)
+from python_easy_chess_gui.ui_package.old_functions import (
+    get_engines,
+    get_row,
+    get_col,
+    relative_row,
+    clear_elements,
+    get_time_mm_ss_ms,
+    get_time_h_mm_ss,
+    get_players,
+    get_engine_id_name,
+    delete_player,
+    get_tag_date,
+    get_engine_hash,
+    get_engine_threads,
+    get_engine_file,
+    get_engine_id_name_list,
+    update_engine_to_config_file,
+    is_name_exists,
+    update_user_config_file,
 )
 
 
@@ -132,7 +151,6 @@ MENU_DEF_NEUTRAL = [
         "&Mode",
         [
             UI_BUTTON_MODE_PLAY,
-            UI_BUTTON_MODE_TRAIN_OPENINGS,
         ],
     ],
     [
@@ -271,7 +289,7 @@ class EasyChessGui:
 
                 # Save clock (time left after a move) as move comment
                 if self.is_save_time_left:
-                    rem_time = self.get_time_h_mm_ss(time_left, False)
+                    rem_time = get_time_h_mm_ss(time_left, False)
                     self.node.comment = '[%clk {}]'.format(rem_time)
             else:
                 if mc == 1:
@@ -281,7 +299,7 @@ class EasyChessGui:
 
                 # Save clock, add clock as comment after a move
                 if self.is_save_time_left:
-                    rem_time = self.get_time_h_mm_ss(time_left, False)
+                    rem_time = get_time_h_mm_ss(time_left, False)
                     self.node.comment = '[%clk {}] {}'.format(rem_time,
                                                          user_comment)
                 else:
@@ -295,7 +313,7 @@ class EasyChessGui:
 
             # Save clock, add clock as comment after a move
             if self.is_save_time_left:
-                rem_time = self.get_time_h_mm_ss(time_left, False)
+                rem_time = get_time_h_mm_ss(time_left, False)
                 self.node.comment = '[%clk {}]'.format(rem_time)
 
     def create_new_window(self, window, flip=False):
@@ -324,225 +342,19 @@ class EasyChessGui:
         window.Close()
         return w
 
-    def delete_player(self, name, pgn, que):
-        """
-        Delete games of player name in pgn.
-
-        :param name:
-        :param pgn:
-        :param que:
-        :return:
-        """
-        logging.info(f'Enters delete_player()')
-
-        pgn_path = Path(pgn)
-        folder_path = pgn_path.parents[0]
-
-        file = PurePath(pgn)
-        pgn_file = file.name
-
-        # Create backup of orig
-        backup = pgn_file + '.backup'
-        backup_path = Path(folder_path, backup)
-        backup_path.touch()
-        origfile_text = Path(pgn).read_text()
-        backup_path.write_text(origfile_text)
-        logging.info(f'backup copy {backup_path} is successfully created.')
-
-        # Define output file
-        output = 'out_' + pgn_file
-        output_path = Path(folder_path, output)
-        logging.info(f'output {output_path} is successfully created.')
-
-        logging.info(f'Deleting player {name}.')
-        gcnt = 0
-
-        # read pgn and save each game if player name to be deleted is not in
-        # the game, either white or black.
-        with open(output_path, 'a') as f:
-            with open(pgn_path) as h:
-                game = chess.pgn.read_game(h)
-                while game:
-                    gcnt += 1
-                    que.put('Delete, {}, processing game {}'.format(
-                        name, gcnt))
-                    wp = game.headers['White']
-                    bp = game.headers['Black']
-
-                    # If this game has no player with name to be deleted
-                    if wp != name and bp != name:
-                        f.write('{}\n\n'.format(game))
-                    game = chess.pgn.read_game(h)
-
-        if output_path.exists():
-            logging.info('Deleting player {} is successful.'.format(name))
-
-            # Delete the orig file and rename the current output to orig file
-            pgn_path.unlink()
-            logging.info('Delete orig pgn file')
-            output_path.rename(pgn_path)
-            logging.info('Rename output to orig pgn file')
-
-        que.put('Done')
-
-    def get_players(self, pgn, q):
-        logging.info(f'Enters get_players()')
-        players = []
-        games = 0
-        with open(pgn) as h:
-            while True:
-                headers = chess.pgn.read_headers(h)
-                if headers is None:
-                    break
-
-                wp = headers['White']
-                bp = headers['Black']
-
-                players.append(wp)
-                players.append(bp)
-                games += 1
-
-        p = list(set(players))
-        ret = [p, games]
-
-        q.put(ret)
-
-    def get_engine_id_name(self, path_and_file, q):
-        """ Returns id name of uci engine """
-        id_name = None
-        folder = Path(path_and_file)
-        folder = folder.parents[0]
-
-        try:
-            if sys_os == 'Windows':
-                engine = chess.engine.SimpleEngine.popen_uci(
-                    path_and_file, cwd=folder,
-                    creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                engine = chess.engine.SimpleEngine.popen_uci(
-                    path_and_file, cwd=folder)
-            id_name = engine.id['name']
-            engine.quit()
-        except Exception:
-            logging.exception('Failed to get id name.')
-
-        q.put(['Done', id_name])
-
-    def get_engine_hash(self, eng_id_name):
-        """ Returns hash value from engine config file """
-        eng_hash = None
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-            for p in data:
-                if p['name'] == eng_id_name:
-                    # There engines without options
-                    try:
-                        for n in p['options']:
-                            if n['name'].lower() == 'hash':
-                                return n['value']
-                    except KeyError:
-                        logging.info('This engine {} has no options.'.format(
-                            eng_id_name))
-                        break
-                    except Exception:
-                        logging.exception('Failed to get engine hash.')
-
-        return eng_hash
-
-    def get_engine_threads(self, eng_id_name):
-        """
-        Returns number of threads of eng_id_name from pecg_engines.json.
-
-        :param eng_id_name: the engine id name
-        :return: number of threads
-        """
-        eng_threads = None
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-            for p in data:
-                if p['name'] == eng_id_name:
-                    try:
-                        for n in p['options']:
-                            if n['name'].lower() == 'threads':
-                                return n['value']
-                    except KeyError:
-                        logging.info('This engine {} has no options.'.format(
-                            eng_id_name))
-                        break
-                    except Exception:
-                        logging.exception('Failed to get engine threads.')
-
-        return eng_threads
-
-    def get_engine_file(self, eng_id_name):
-        """
-        Returns eng_id_name's filename and path from pecg_engines.json file.
-
-        :param eng_id_name: engine id name
-        :return: engine file and its path
-        """
-        eng_file, eng_path_and_file = None, None
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-            for p in data:
-                if p['name'] == eng_id_name:
-                    eng_file = p['command']
-                    eng_path_and_file = Path(p['workingDirectory'],
-                                             eng_file).as_posix()
-                    break
-
-        return eng_file, eng_path_and_file
-
-    def get_engine_id_name_list(self):
-        """
-        Read engine config file.
-
-        :return: list of engine id names
-        """
-        eng_id_name_list = []
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-            for p in data:
-                if p['protocol'] == 'uci':
-                    eng_id_name_list.append(p['name'])
-
-        eng_id_name_list = sorted(eng_id_name_list)
-
-        return eng_id_name_list
-
-    def update_user_config_file(self, username):
-        """
-        Update user config file. If username does not exist, save it.
-        :param username:
-        :return:
-        """
-        with open(self.user_config_file, 'r') as json_file:
-            data = json.load(json_file)
-
-        # Add the new entry if it does not exist
-        is_name = False
-        for i in range(len(data)):
-            if data[i]['username'] == username:
-                is_name = True
-                break
-
-        if not is_name:
-            data.append({'username': username})
-
-            # Save
-            with open(self.user_config_file, 'w') as h:
-                json.dump(data, h, indent=4)
-
-    def check_user_config_file(self):
+    def check_user_config_file(
+        self,
+        user_config_file,
+    ):
         """
         Check presence of pecg_user.json file, if nothing we will create
         one with ['username': 'Human']
 
         :return:
         """
-        user_config_file_path = Path(self.user_config_file)
+        user_config_file_path = Path(user_config_file)
         if user_config_file_path.exists():
-            with open(self.user_config_file, 'r') as json_file:
+            with open(user_config_file, 'r') as json_file:
                 data = json.load(json_file)
                 for p in data:
                     username = p['username']
@@ -553,75 +365,16 @@ class EasyChessGui:
             data.append({'username': 'Human'})
 
             # Save data to pecg_user.json
-            with open(self.user_config_file, 'w') as h:
+            with open(user_config_file, 'w') as h:
                 json.dump(data, h, indent=4)
 
-    def update_engine_to_config_file(self, eng_path_file, new_name, old_name, user_opt):
-        """
-        Update engine config file based on params.
-
-        :param eng_path_file: full path of engine
-        :param new_name: new engine id name
-        :param new_name: old engine id name
-        :param user_opt: a list of dict, i.e d = ['a':a, 'b':b, ...]
-        :return:
-        """
-        folder = Path(eng_path_file)
-        folder = folder.parents[0]
-        folder = Path(folder)
-        folder = folder.as_posix()
-
-        file = PurePath(eng_path_file)
-        file = file.name
-
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-
-        for p in data:
-            command = p['command']
-            work_dir = p['workingDirectory']
-
-            if file == command and folder == work_dir and old_name == p['name']:
-                p['name'] = new_name
-                for k, v in p.items():
-                    if k == 'options':
-                        for d in v:
-                            # d = {'name': 'Ponder', 'default': False,
-                            # 'value': False, 'type': 'check'}
-                            
-                            default_type = type(d['default'])
-                            opt_name = d['name']
-                            opt_value = d['value']
-                            for u in user_opt:
-                                # u = {'name': 'CDrill 1400'}
-                                for k1, v1 in u.items():
-                                    if k1 == opt_name:
-                                        v1 = int(v1) if default_type == int else v1
-                                        if v1 != opt_value:
-                                            d['value'] = v1
-                break
-
-        # Save data to pecg_engines.json
-        with open(self.engine_config_file, 'w') as h:
-            json.dump(data, h, indent=4)
-
-    def is_name_exists(self, name):
-        """
-
-        :param name: The name to check in pecg.engines.json file.
-        :return:
-        """
-        with open(self.engine_config_file, 'r') as json_file:
-            data = json.load(json_file)
-
-        for p in data:
-            jname = p['name']
-            if jname == name:
-                return True
-
-        return False
-
-    def add_engine_to_config_file(self, engine_path_and_file, pname, que):
+    def add_engine_to_config_file(
+        self,
+        engine_path_and_file,
+        pname,
+        que,
+        engine_config_file,
+    ):
         """
         Add pname config in pecg_engines.json file.
 
@@ -635,7 +388,7 @@ class EasyChessGui:
 
         option = []
 
-        with open(self.engine_config_file, 'r') as json_file:
+        with open(engine_config_file, 'r') as json_file:
             data = json.load(json_file)
 
         try:
@@ -703,26 +456,29 @@ class EasyChessGui:
                      'options': option})
 
         # Save data to pecg_engines.json
-        with open(self.engine_config_file, 'w') as h:
+        with open(engine_config_file, 'w') as h:
             json.dump(data, h, indent=4)
 
         que.put('Success')
 
-    def check_engine_config_file(self):
+    def check_engine_config_file(
+        self,
+        engine_config_file,
+    ):
         """
         Check presence of engine config file pecg_engines.json. If not
         found we will create it, with entries from engines in Engines folder.
 
         :return:
         """
-        ec = Path(self.engine_config_file)
+        ec = Path(engine_config_file)
         if ec.exists():
             return
 
         data = []
         cwd = Path.cwd()
 
-        self.engine_file_list = self.get_engines()
+        self.engine_file_list = get_engines()
 
         for fn in self.engine_file_list:
             # Run engine and get id name and options
@@ -789,32 +545,8 @@ class EasyChessGui:
                          'options': option})
 
         # Save data to pecg_engines.json
-        with open(self.engine_config_file, 'w') as h:
+        with open(engine_config_file, 'w') as h:
             json.dump(data, h, indent=4)
-
-    def get_time_mm_ss_ms(self, time_ms):
-        """ Returns time in min:sec:millisec given time in millisec """
-        s, ms = divmod(int(time_ms), 1000)
-        m, s = divmod(s, 60)
-
-        # return '{:02d}m:{:02d}s:{:03d}ms'.format(m, s, ms)
-        return '{:02d}m:{:02d}s'.format(m, s)
-
-    def get_time_h_mm_ss(self, time_ms, symbol=True):
-        """
-        Returns time in h:mm:ss format.
-
-        :param time_ms:
-        :param symbol:
-        :return:
-        """
-        s, ms = divmod(int(time_ms), 1000)
-        m, s = divmod(s, 60)
-        h, m = divmod(m, 60)
-
-        if not symbol:
-            return '{:01d}:{:02d}:{:02d}'.format(h, m, s)
-        return '{:01d}h:{:02d}m:{:02d}s'.format(h, m, s)
 
     def update_text_box(self, window, msg, is_hide):
         """ Update text elements """
@@ -841,16 +573,12 @@ class EasyChessGui:
 
         return best_move
 
-    def get_tag_date(self):
-        """ Return date in pgn tag date format """
-        return datetime.today().strftime('%Y.%m.%d')
-
     def init_game(self):
         """ Initialize game with initial pgn tag values """
         self.game = chess.pgn.Game()
         self.node = None
         self.game.headers['Event'] = INIT_PGN_TAG['Event']
-        self.game.headers['Date'] = self.get_tag_date()
+        self.game.headers['Date'] = get_tag_date()
         self.game.headers['White'] = INIT_PGN_TAG['White']
         self.game.headers['Black'] = INIT_PGN_TAG['Black']
 
@@ -864,23 +592,9 @@ class EasyChessGui:
         self.game = chess.pgn.Game()
 
         self.game.headers['Event'] = old_event
-        self.game.headers['Date'] = self.get_tag_date()
+        self.game.headers['Date'] = get_tag_date()
         self.game.headers['White'] = old_white
         self.game.headers['Black'] = old_black
-
-    def clear_elements(self, window):
-        """ Clear movelist, score, pv, time, depth and nps boxes """
-        window.find_element('search_info_all_k').Update('')
-        window.find_element('_movelist_').Update(disabled=False)
-        window.find_element('_movelist_').Update('', disabled=True)
-        window.find_element('polyglot_book1_k').Update('')
-        window.find_element('polyglot_book2_k').Update('')
-        window.find_element('advise_info_k').Update('')
-        window.find_element('comment_k').Update('')
-        window.Element('w_base_time_k').Update('')
-        window.Element('b_base_time_k').Update('')
-        window.Element('w_elapse_k').Update('')
-        window.Element('b_elapse_k').Update('')
 
     def update_labels_and_game_tags(self, window, human='Human'):
         """ Update player names """
@@ -980,34 +694,6 @@ class EasyChessGui:
                       self.move_sq_light_color
         btn_sq.Update(button_color=('white', bd_sq_color))
 
-    def relative_row(self, s, stm):
-        """
-        The board can be viewed, as white at the bottom and black at the
-        top. If stm is white the row 0 is at the bottom. If stm is black
-        row 0 is at the top.
-        :param s: square
-        :param stm: side to move
-        :return: relative row
-        """
-        return 7 - self.get_row(s) if stm else self.get_row(s)
-
-    def get_row(self, s):
-        """
-        This row is based on PySimpleGUI square mapping that is 0 at the
-        top and 7 at the bottom.
-        In contrast Python-chess square mapping is 0 at the bottom and 7
-        at the top. chess.square_rank() is a method from Python-chess that
-        returns row given square s.
-
-        :param s: square
-        :return: row
-        """
-        return 7 - chess.square_rank(s)
-
-    def get_col(self, s):
-        """ Returns col given square s """
-        return chess.square_file(s)
-
     def redraw_board(self, window):
         """
         Redraw board at start and afte a move.
@@ -1102,8 +788,8 @@ class EasyChessGui:
             to = chess.D8
             pc = ROOKB
 
-        self.psg_board[self.get_row(fr)][self.get_col(fr)] = BLANK
-        self.psg_board[self.get_row(to)][self.get_col(to)] = pc
+        self.psg_board[get_row(fr)][get_col(fr)] = BLANK
+        self.psg_board[get_row(to)][get_col(to)] = pc
         self.redraw_board(window)
 
     def update_ep(self, window, move, stm):
@@ -1121,7 +807,7 @@ class EasyChessGui:
         else:
             capture_sq = to + 8
 
-        self.psg_board[self.get_row(capture_sq)][self.get_col(capture_sq)] = BLANK
+        self.psg_board[get_row(capture_sq)][get_col(capture_sq)] = BLANK
         self.redraw_board(window)
 
     def get_promo_piece(self, move, stm, human):
@@ -1194,7 +880,7 @@ class EasyChessGui:
             timer = Timer(self.engine_tc_type, self.engine_base_time_ms,
                       self.engine_inc_time_ms, self.engine_period_moves)
 
-        elapse_str = self.get_time_h_mm_ss(timer.base)
+        elapse_str = get_time_h_mm_ss(timer.base)
         is_white_base = self.is_user_white and name == 'human' or \
                 not self.is_user_white and name != 'human'
         window.Element('w_base_time_k' if is_white_base else 'b_base_time_k').Update(
@@ -1267,7 +953,7 @@ class EasyChessGui:
             fr_sq = chess.square(fr_col, 7 - fr_row)
             to_sq = chess.square(to_col, 7 - to_row)
         
-            if self.relative_row(to_sq, board.turn) == RANK_8 and \
+            if relative_row(to_sq, board.turn) == RANK_8 and \
                 moved_piece == chess.PAWN:
                 is_promote = True
                 pyc_promo, psg_promo = self.get_promo_piece(
@@ -1324,13 +1010,13 @@ class EasyChessGui:
                     k2 = UI_KEY_TIME_BASE_BLACK
             
                 # Update elapse box
-                elapse_str = self.get_time_mm_ss_ms(
+                elapse_str = get_time_mm_ss_ms(
                     human_timer.elapse
                 )
                 window.Element(k1).Update(elapse_str)
             
                 # Update remaining time box
-                elapse_str = self.get_time_h_mm_ss(
+                elapse_str = get_time_h_mm_ss(
                     human_timer.base
                 )
                 window.Element(k2).Update(elapse_str)
@@ -1517,7 +1203,7 @@ class EasyChessGui:
                     button, value = window.Read(timeout=100)
 
                     # Update elapse box in m:s format
-                    elapse_str = self.get_time_mm_ss_ms(human_timer.elapse)
+                    elapse_str = get_time_mm_ss_ms(human_timer.elapse)
                     k = 'w_elapse_k'
                     if not self.is_user_white:
                         k = 'b_elapse_k'
@@ -1529,10 +1215,14 @@ class EasyChessGui:
 
                     # Mode: Play, Stm: User, Run adviser engine
                     if button == 'Start::right_adviser_k':
-                        self.adviser_threads = self.get_engine_threads(
-                            self.adviser_id_name)
-                        self.adviser_hash = self.get_engine_hash(
-                            self.adviser_id_name)
+                        self.adviser_threads = get_engine_threads(
+                            self.adviser_id_name,
+                            engine_config_file=self.engine_config_file,
+                        )
+                        self.adviser_hash = get_engine_hash(
+                            self.adviser_id_name,
+                            engine_config_file=self.engine_config_file,
+                        )
                         adviser_base_ms = self.adviser_movetime_sec * 1000
                         adviser_inc_ms = 0
 
@@ -1629,7 +1319,7 @@ class EasyChessGui:
                     # Mode: Play, Stm: User
                     if button == 'New::new_game_k' or is_search_stop_for_new_game:
                         is_new_game = True
-                        self.clear_elements(window)
+                        clear_elements(window)
                         break
 
                     if button == 'Save to My Games::save_game_k':
@@ -1685,7 +1375,7 @@ class EasyChessGui:
                     # Mode: Play, Stm: User
                     if button == 'Neutral' or is_search_stop_for_neutral:
                         is_exit_game = True
-                        self.clear_elements(window)
+                        clear_elements(window)
                         break
 
                     # Mode: Play, stm: User
@@ -1811,7 +1501,7 @@ class EasyChessGui:
                         button, value = window.Read(timeout=100)
 
                         # Update elapse box in m:s format
-                        elapse_str = self.get_time_mm_ss_ms(engine_timer.elapse)
+                        elapse_str = get_time_mm_ss_ms(engine_timer.elapse)
                         k = 'b_elapse_k'
                         if not self.is_user_white:
                             k = 'w_elapse_k'
@@ -1975,11 +1665,11 @@ class EasyChessGui:
                     k2 = 'w_base_time_k'
 
                 # Update elapse box
-                elapse_str = self.get_time_mm_ss_ms(engine_timer.elapse)
+                elapse_str = get_time_mm_ss_ms(engine_timer.elapse)
                 window.Element(k1).Update(elapse_str)
 
                 # Update remaining time box
-                elapse_str = self.get_time_h_mm_ss(engine_timer.base)
+                elapse_str = get_time_h_mm_ss(engine_timer.base)
                 window.Element(k2).Update(elapse_str)
 
                 window.find_element('_gamestatus_').Update('Mode     Play')
@@ -2038,7 +1728,7 @@ class EasyChessGui:
             window.Close()
             sys.exit(0)
 
-        self.clear_elements(window)
+        clear_elements(window)
 
         return False if is_exit_game else is_new_game
 
@@ -2046,23 +1736,6 @@ class EasyChessGui:
         """ Save game in append mode """
         with open(self.pecg_auto_save_game, mode = 'a+') as f:
             f.write('{}\n\n'.format(self.game))
-
-    def get_engines(self):
-        """
-        Get engine filenames [a.exe, b.exe, ...]
-
-        :return: list of engine filenames
-        """
-        engine_list = []
-        files = os.listdir(ENGINE_PATH)
-        for file in files:
-            if not file.endswith('.gz') and not file.endswith('.dll') \
-                    and not file.endswith('.DS_Store') \
-                    and not file.endswith('.bin') \
-                    and not file.endswith('.dat'):
-                engine_list.append(file)
-
-        return engine_list
 
     def create_board(self, is_user_white=True):
         """
@@ -2183,7 +1856,10 @@ class EasyChessGui:
                    if len(self.engine_id_name_list) >= 2 \
                    else self.engine_id_name_list[0]
             self.adviser_file, self.adviser_path_and_file = \
-                self.get_engine_file(self.adviser_id_name)
+                get_engine_file(
+                    self.adviser_id_name,
+                    engine_config_file=self.engine_config_file,
+                )
         except IndexError as e:
             logging.warning(e)
         except Exception:
@@ -2193,8 +1869,10 @@ class EasyChessGui:
         engine_id_name = None
         try:
             engine_id_name = self.opp_id_name = self.engine_id_name_list[0]
-            self.opp_file, self.opp_path_and_file = self.get_engine_file(
-                engine_id_name)
+            self.opp_file, self.opp_path_and_file = get_engine_file(
+                engine_id_name,
+                engine_config_file=self.engine_config_file,
+            )
         except IndexError as e:
             logging.warning(e)
         except Exception:
@@ -2218,11 +1896,17 @@ class EasyChessGui:
                            icon=ico_path[platform]['pecg'])
 
         # Read user config file, if missing create and new one
-        self.check_user_config_file()
+        self.check_user_config_file(
+            user_config_file=self.user_config_file,
+        )
 
         # If engine config file (pecg_engines.json) is missing, then create it
-        self.check_engine_config_file()
-        self.engine_id_name_list = self.get_engine_id_name_list()
+        self.check_engine_config_file(
+            engine_config_file=self.engine_config_file,
+        )
+        self.engine_id_name_list = get_engine_id_name_list(
+            engine_config_file=self.engine_config_file,
+        )
 
         # Define default opponent engine, user can change this later.
         engine_id_name = self.get_default_engine_opponent()
@@ -2284,8 +1968,8 @@ class EasyChessGui:
 
                         t1 = time.perf_counter()
                         que = queue.Queue()
-                        t = threading.Thread(target=self.get_players,
-                                             args=(pgn, que,),daemon=True)
+                        t = threading.Thread(target=get_players,
+                                             args=(pgn, que,), daemon=True)
                         t.start()
                         msg = None
                         while True:
@@ -2322,9 +2006,9 @@ class EasyChessGui:
 
                         t1 = time.perf_counter()
                         que = queue.Queue()
-                        t = threading.Thread(target=self.delete_player,
-                                         args=(player_name, v['pgn_k'], que,),
-                                         daemon=True)
+                        t = threading.Thread(target=delete_player,
+                                             args=(player_name, v['pgn_k'], que,),
+                                             daemon=True)
                         t.start()
                         msg = None
                         while True:
@@ -2485,7 +2169,10 @@ class EasyChessGui:
                         username = self.username = v['username_k']
                         if username == '':
                             username = backup
-                        self.update_user_config_file(username)
+                        update_user_config_file(
+                            username,
+                            user_config_file=self.user_config_file,
+                        )
                         break
                 w.Close()
                 window.Enable()
@@ -2540,7 +2227,7 @@ class EasyChessGui:
                                 new_engine_path_file = v1['engine_path_file_k']
 
                                 que = queue.Queue()
-                                t = threading.Thread(target=self.get_engine_id_name,
+                                t = threading.Thread(target=get_engine_id_name,
                                                      args=(new_engine_path_file, que,),
                                                      daemon=True)
                                 t.start()
@@ -2581,8 +2268,10 @@ class EasyChessGui:
                                     new_engine_id_name = v1['engine_id_name_k']
                                     if new_engine_id_name != '':
                                         # Check if new_engine_id_name is already existing
-                                        if self.is_name_exists(
-                                                new_engine_id_name):
+                                        if is_name_exists(
+                                                new_engine_id_name,
+                                            engine_config_file=self.engine_config_file,
+                                        ):
                                             sg.Popup(
                                                 '{} is existing. Please '
                                                 'modify the name! You can '
@@ -2613,7 +2302,7 @@ class EasyChessGui:
                             t = threading.Thread(
                                 target=self.add_engine_to_config_file,
                                 args=(new_engine_path_file,
-                                      new_engine_id_name, que,), daemon=True)
+                                      new_engine_id_name, que, self.engine_config_file,), daemon=True)
                             t.start()
                             while True:
                                 try:
@@ -2630,7 +2319,9 @@ class EasyChessGui:
                                          icon=ico_path[platform]['pecg'])
 
                             self.engine_id_name_list = \
-                                self.get_engine_id_name_list()
+                                get_engine_id_name_list(
+                                    engine_config_file=self.engine_config_file,
+                                )
                         break
 
                 install_win.Close()
@@ -2835,10 +2526,14 @@ class EasyChessGui:
 
                 # Save the new configured engine to pecg_engines.json file
                 if not is_cancel_edit_win and not is_cancel_modify_win:
-                    self.update_engine_to_config_file(
+                    update_engine_to_config_file(
                         engine_path_file, engine_id_name,
-                        orig_idname, ret_opt_name)
-                    self.engine_id_name_list = self.get_engine_id_name_list()
+                        orig_idname, ret_opt_name,
+                        engine_config_file=self.engine_config_file,
+                    )
+                    self.engine_id_name_list = get_engine_id_name_list(
+                        engine_config_file=self.engine_config_file,
+                    )
 
                 edit_win.Close()
                 window.Enable()
@@ -2888,7 +2583,9 @@ class EasyChessGui:
 
                 # Save the new configured engine to pecg_engines.json file
                 if not is_cancel:
-                    self.engine_id_name_list = self.get_engine_id_name_list()
+                    self.engine_id_name_list = get_engine_id_name_list(
+                        engine_config_file=self.engine_config_file,
+                    )
 
                 delete_win.Close()
                 window.Enable()
@@ -2935,8 +2632,10 @@ class EasyChessGui:
                         # selecting an engine
                         try:
                             engine_id_name = self.opp_id_name = v['engine_id_k'][0]
-                            self.opp_file, self.opp_path_and_file = self.get_engine_file(
-                                    engine_id_name)
+                            self.opp_file, self.opp_path_and_file = get_engine_file(
+                                    engine_id_name,
+                                engine_config_file=self.engine_config_file,
+                            )
 
                         except IndexError:
                             logging.info('User presses OK but did not select '
@@ -2993,8 +2692,10 @@ class EasyChessGui:
                         # We use try/except because user can press OK without selecting an engine
                         try:
                             adviser_eng_id_name = self.adviser_id_name = v['adviser_id_name_k'][0]
-                            self.adviser_file, self.adviser_path_and_file = self.get_engine_file(
-                                    adviser_eng_id_name)
+                            self.adviser_file, self.adviser_path_and_file = get_engine_file(
+                                    adviser_eng_id_name,
+                                engine_config_file=self.engine_config_file,
+                            )
                         except IndexError:
                             logging.info('User presses OK but did not select an engine')
                         except Exception:
@@ -3148,7 +2849,7 @@ class EasyChessGui:
             # Mode: Neutral
             if button == 'Flip':
                 window.find_element('_gamestatus_').Update('Mode     Neutral')
-                self.clear_elements(window)
+                clear_elements(window)
                 window = self.create_new_window(window, True)
                 continue
 
